@@ -13,6 +13,7 @@
 //std../../
 #include <iostream>
 #include <cstdlib>
+#include <cmath>
 
 // Defines to control the source of the images
 
@@ -25,6 +26,8 @@
 
 int main(int argc, char *argv[]) 
 {
+	// All the variables
+
 	// OpenCV video capture object
     cv::VideoCapture capture;
 	
@@ -43,6 +46,15 @@ int main(int argc, char *argv[])
 
 	// Variable to store the detected faces
 	std::vector<cv::Rect> faces;
+
+	// Variable to store the last value of the image
+    cv::Point last_Center(320,240); // Image size = 640 x 480
+
+    // Variable to store the Rect value
+    cv::Rect detectedFace;
+
+    // bool to control the detection
+    bool found = false;
 
 	//check user args
 	switch(argc)
@@ -119,29 +131,156 @@ int main(int argc, char *argv[])
 		face_detect.detectMultiScale(	gray_image, // Image
 										faces, 		// Faces location
 										1.3, 		// Scale factor
-										4,			// min Neighbors
+										5,			// min Neighbors
 										0 | cv::CASCADE_SCALE_IMAGE,			// Flags
-										cv::Size(30,30));	// Min Size
+										cv::Size(1,1));	// Min Size
 
-		// Print all the detected faces
-		for(int i = 0; i < faces.size(); i++)
+		// Number of faces detector
+		int faceSize = faces.size();
+
+		switch(faceSize)
 		{
-			cv::Rect temp = faces[i];
-			// Print a rectangle 
-			cv::rectangle(	image, 			// Destination image
-							temp, 			// face rectangle
-							CV_RGB(0,255,0), 	// Color
-							2); 				// thickness	 
+			case 0:
+				// TODO: KALMAN DETECTION!!!
+				// There is no face detected
+				std::cout << "Face lost!!! \n";
+				// Update the state
+				found = false;
+				// Restore the center position
+				last_Center = cv::Point(320,240);
+				break;
+			case 1:
+				// It's only one face
+				if (found) // If 
+				{
+					// If there is a face detected before
+
+					// Get the center of the face detected
+					cv::Point face_center;
+					face_center.x = faces[0].x + (faces[0].width/2);
+					face_center.y = faces[0].y + (faces[0].height/2);
+					// Check if this detection is correct or a false detection
+					// A correct detection has a difference of +/- 5 pixels max, else the value is discarded
+					if((abs(face_center.x - last_Center.x) < 6) and (abs(face_center.y - last_Center.y) < 6))
+					{
+						std::cout << "Is in marge!!\n";
+						// Update the value of the center of the image
+						last_Center = face_center;
+						// Update the print rectangle
+						detectedFace = faces[0];
+					}
+					else
+					{
+						// If the face detected is incorrect
+						found = false;
+					}
+					// Debug
+
+				}
+				else
+				{
+					// If there is the first detection
+					// Get the center of the face detected
+					cv::Point face_center;
+					face_center.x = faces[0].x + (faces[0].width/2);
+					face_center.y = faces[0].y + (faces[0].height/2);
+					// Update the value of the center of the image
+					last_Center = face_center;
+					// Update the print rectangle
+					detectedFace = faces[0];
+					// Update the status as detected
+					found = true;
+				}
+				break;
+			default:
+				// There is more than 1 face detected
+				if(found)
+				{
+					// If there is a face detected before
+					std::cout << "Entro!!\n";
+					// Variable to check the correct detection
+					bool correctDetect = false;
+
+					// Check in all the positions and get the close position to the last detection
+					for(int i = 0; i < faceSize; i++)
+					{
+						cv::Point face_center;
+						face_center.x = faces[i].x + (faces[i].width/2);
+						face_center.y = faces[i].y + (faces[i].height/2);
+						// Check if this detection is correct or a false detection
+						// A correct detection has a difference of +/- 5 pixels max, else the value is discarded
+						if((abs(face_center.x - last_Center.x) < 6) and (abs(face_center.y - last_Center.y) < 6))
+						{
+							std::cout << "Is in marge with more than 1 faces!!\n";
+							// Update the value of the center of the image
+							last_Center = face_center;
+							correctDetect = true;
+							// Update the print rectangle
+							detectedFace = faces[i];
+							// exit loop
+							break;
+						}
+					}
+					if(correctDetect)
+					{
+						std::cout << "He detectado algo?\n";
+					}
+					else
+					{
+						std::cout << "O no?\n";
+						found = false;
+					}
+
+				}
+				else
+				{
+					// If there is the first detection
+
+					//  Detect position closest to the center	
+					int lastDistance = 1500; // Init with a big value
+
+					// Check in all the positions and get the closest position to the center
+					for(int i = 0; i < faceSize; i++)
+					{
+						// Get the center position of the detection
+						cv::Point face_center;
+						face_center.x = faces[i].x + (faces[i].width/2);
+						face_center.y = faces[i].y + (faces[i].height/2);
+
+						// Get the absolute distance to the center of the image
+						int temp = abs(face_center.x - last_Center.x) + abs(face_center.y - last_Center.y);
+
+						// Update the value if the distance is less than the last one detected
+						if(lastDistance > temp)
+						{
+							// Update the distance
+							lastDistance = temp;
+							// Get the correct value
+							last_Center = face_center;
+							// Update the print rectangle
+							detectedFace = faces[i];
+						}
+					}
+					found = true;
+				}
+				break;
+
 		}
 
-	    cv::namedWindow( "Face Detector", cv::WINDOW_AUTOSIZE );// Create a window for display.
-	    cv::imshow( "Face Detector", image );                   // Show our image inside it.
+		// The rect is printed if something is found
+		if(found)
+		{
+			// Print a rectangle 
+			cv::rectangle(	image, 				// Destination image
+							detectedFace, 		// face rectangle
+							CV_RGB(0,255,0), 	// Color
+							2);
+		}
 
-	    // Test to check if we detect more than 2 faces
-	    if(faces.size() > 1)
-	    {
-	    	std::cout << "Se han detectado " << faces.size() << " caras.\n";
-	    }
+		// Show the image
+		cv::namedWindow( "Face Detector", cv::WINDOW_AUTOSIZE );// Create a window for display.
+		cv::imshow( "Face Detector", image );                   // Show our image inside it.
+
 	    // If the 'q' is pressed, exit the loop
 	    if(cv::waitKey(1) == 'q')
 	    {
