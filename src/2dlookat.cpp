@@ -19,10 +19,10 @@
 
 // If Camera is active, the image source is the cámera
 
-//#define Camera
+#define Camera
 
 // If the Video is active, the image source is the video file
-#define Video
+//#define Video
 
 int main(int argc, char *argv[]) 
 {
@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
 		face_detect.detectMultiScale(	gray_image, // Image
 										faces, 		// Faces location
 										1.3, 		// Scale factor
-										5,			// min Neighbors
+										4,			// min Neighbors
 										0 | cv::CASCADE_SCALE_IMAGE,			// Flags
 										cv::Size(1,1));	// Min Size
 
@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 					// A correct detection has a difference of +/- 5 pixels max, else the value is discarded
 					if((abs(face_center.x - last_Center.x) < 6) and (abs(face_center.y - last_Center.y) < 6))
 					{
-						std::cout << "Is in marge!!\n";
+						// The image is in the marge
 						// Update the value of the center of the image
 						last_Center = face_center;
 						// Update the print rectangle
@@ -197,7 +197,7 @@ int main(int argc, char *argv[])
 				if(found)
 				{
 					// If there is a face detected before
-					std::cout << "Entro!!\n";
+
 					// Variable to check the correct detection
 					bool correctDetect = false;
 
@@ -211,7 +211,6 @@ int main(int argc, char *argv[])
 						// A correct detection has a difference of +/- 5 pixels max, else the value is discarded
 						if((abs(face_center.x - last_Center.x) < 6) and (abs(face_center.y - last_Center.y) < 6))
 						{
-							std::cout << "Is in marge with more than 1 faces!!\n";
 							// Update the value of the center of the image
 							last_Center = face_center;
 							correctDetect = true;
@@ -223,11 +222,9 @@ int main(int argc, char *argv[])
 					}
 					if(correctDetect)
 					{
-						std::cout << "He detectado algo?\n";
 					}
 					else
 					{
-						std::cout << "O no?\n";
 						found = false;
 					}
 
