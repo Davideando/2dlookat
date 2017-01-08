@@ -22,7 +22,7 @@
 #define Camera
 
 // If the Video is active, the image source is the video file
-//#define Video
+#define Video
 
 int main(int argc, char *argv[]) 
 {
@@ -56,6 +56,21 @@ int main(int argc, char *argv[])
     // bool to control the detection
     bool found = false;
 
+    // Variable to adjust dT
+    double ticks = 0;
+
+    // Number of frames without face detetion
+    int numFrames = 0;
+
+    //Define the Kalman filter
+    cv::KalmanFilter KF(4,2,0);	// 4 dynamic parameters
+    							// 2 measure parameters
+    							// 0 control variables
+
+    // Variable to store the measures
+    cv::Mat measure(2, 1, CV_32F); // 2 rows x 1 column of float
+
+    // Define the measure 
 	//check user args
 	switch(argc)
 	{
@@ -110,9 +125,32 @@ int main(int argc, char *argv[])
     	return -1;
     }
 
+    // Init de Kalman filter
+    // Initialize the transition matrix as a identity matrix 4 x 4
+    cv::setIdentity(KF.transitionMatrix, cv::Scalar::all(1.0f));
+
+    // Set the identity matrix to meaasurement
+    cv::setIdentity(KF.measurementMatrix);
+
+    // Init the measurement Noise covariance matrix as identity matrix of 1e-1
+    cv::setIdentity(KF.measurementNoiseCov, cv::Scalar::all(1e-1));
+
+    // Init the process noise covariance matrix as identity matrix of 1e-2
+    cv::setIdentity(KF.processNoiseCov, cv::Scalar::all(1e-2));
+
+    // Init the measure results
+    measure.setTo(cv::Scalar::all(0.0f));
+
+
     // Program Loop
     while(1)
     {
+    	// dT calculation
+    	double preTick = ticks;
+    	ticks = (double) cv::getTickCount();
+
+        double dT = (ticks - preTick) / cv::getTickFrequency(); // Seconds
+
 	    // Get the next image
 	  	capture.read(image);
 
@@ -133,7 +171,7 @@ int main(int argc, char *argv[])
 										1.3, 		// Scale factor
 										4,			// min Neighbors
 										0 | cv::CASCADE_SCALE_IMAGE,			// Flags
-										cv::Size(1,1));	// Min Size
+										cv::Size(30,30));	// Min Size
 
 		// Number of faces detector
 		int faceSize = faces.size();
@@ -143,11 +181,18 @@ int main(int argc, char *argv[])
 			case 0:
 				// TODO: KALMAN DETECTION!!!
 				// There is no face detected
-				std::cout << "Face lost!!! \n";
-				// Update the state
-				found = false;
-				// Restore the center position
-				last_Center = cv::Point(320,240);
+				if(numFrames == 10 && found)
+				{
+					std::cout << "Face lost!!!" << std::endl;
+					// Update the state
+					found = false;
+					// Restore the center position
+					last_Center = cv::Point(320,240);
+				}
+				else
+				{
+					numFrames++;
+				}
 				break;
 			case 1:
 				// It's only one face
@@ -168,17 +213,29 @@ int main(int argc, char *argv[])
 						last_Center = face_center;
 						// Update the print rectangle
 						detectedFace = faces[0];
+
+						// Update the Kalman filter values
+						measure.at<float>(0) = last_Center.x;
+						measure.at<float>(1) = last_Center.y;
+
+						// Correct the position in kalman filter
+						KF.correct(measure);
+						// Restore the counter
+						numFrames = 0;
 					}
 					else
 					{
 						// If the face detected is incorrect
-						found = false;
+						//found = false;
+						numFrames++;
 					}
-					// Debug
 
 				}
 				else
 				{
+					// Restore the counter
+					numFrames = 0;
+
 					// If there is the first detection
 					// Get the center of the face detected
 					cv::Point face_center;
@@ -190,7 +247,21 @@ int main(int argc, char *argv[])
 					detectedFace = faces[0];
 					// Update the status as detected
 					found = true;
+
+					// Update the Kalman filter values
+					measure.at<float>(0) = last_Center.x;
+					measure.at<float>(1) = last_Center.y;
+
+					// Init the values of Kalman filter
+					cv::setIdentity(KF.errorCovPre, cv::Scalar::all(0.1f));
+
+					KF.statePost.at<float>(0) = measure.at<float>(0);
+					KF.statePost.at<float>(1) = measure.at<float>(1);
+					KF.statePost.at<float>(2) = 0.0f;
+					KF.statePost.at<float>(3) = 0.0f;
+
 				}
+
 				break;
 			default:
 				// There is more than 1 face detected
@@ -222,15 +293,28 @@ int main(int argc, char *argv[])
 					}
 					if(correctDetect)
 					{
+						// Update the Kalman filter values
+						measure.at<float>(0) = last_Center.x;
+						measure.at<float>(1) = last_Center.y;
+
+						// Correct the position
+						KF.correct(measure);
+						
+						// Restore the counter
+						numFrames = 0;
 					}
 					else
 					{
-						found = false;
+						//found = false;
+						numFrames++;
 					}
 
 				}
 				else
 				{
+					// Restore the counter
+					numFrames = 0;
+
 					// If there is the first detection
 
 					//  Detect position closest to the center	
@@ -258,6 +342,17 @@ int main(int argc, char *argv[])
 							detectedFace = faces[i];
 						}
 					}
+					// Update the Kalman filter values
+					measure.at<float>(0) = last_Center.x;
+					measure.at<float>(1) = last_Center.y;
+
+					// Init the values of Kalman filter
+					cv::setIdentity(KF.errorCovPre, cv::Scalar::all(0.1f));
+
+					KF.statePost.at<float>(0) = measure.at<float>(0);
+					KF.statePost.at<float>(1) = measure.at<float>(1);
+					KF.statePost.at<float>(2) = 0.0f;
+					KF.statePost.at<float>(3) = 0.0f;
 					found = true;
 				}
 				break;
@@ -265,14 +360,23 @@ int main(int argc, char *argv[])
 		}
 
 		// The rect is printed if something is found
-		if(found)
+		if(found && numFrames == 0)
 		{
 			// Print a rectangle 
 			cv::rectangle(	image, 				// Destination image
 							detectedFace, 		// face rectangle
 							CV_RGB(0,255,0), 	// Color
 							2);
+
+			// Print the center of the detection
+			cv::circle(	image,			// Destination image
+						last_Center,	// Center of the detection
+						2, 				// Radius
+						CV_RGB(0,255,0),// Color
+						-1);			// Fill the circle
 		}
+
+		// Print the Kalman detected center
 
 		// Show the image
 		cv::namedWindow( "Face Detector", cv::WINDOW_AUTOSIZE );// Create a window for display.
