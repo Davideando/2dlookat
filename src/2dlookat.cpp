@@ -169,19 +169,37 @@ int main(int argc, char *argv[])
 		face_detect.detectMultiScale(	gray_image, // Image
 										faces, 		// Faces location
 										1.3, 		// Scale factor
-										4,			// min Neighbors
+										2,			// min Neighbors
 										0 | cv::CASCADE_SCALE_IMAGE,			// Flags
 										cv::Size(30,30));	// Min Size
 
 		// Number of faces detector
 		int faceSize = faces.size();
 
+		// Kalman filter center
+		cv::Point kalmanCenter(320,240);
+
+		if(found)
+		{
+			// Update the Kalman filter values
+
+	        KF.transitionMatrix.at<float>(3) = dT;
+	        KF.transitionMatrix.at<float>(7) = dT;
+
+	        // Predict the new position
+	        cv::Mat state(4 , 1, CV_32F); // 4 Results, 1 column, float
+
+	        state = KF.predict();
+
+	        kalmanCenter = cv::Point(state.at<float>(0), state.at<float>(1));
+	    }
+
 		switch(faceSize)
 		{
 			case 0:
 				// TODO: KALMAN DETECTION!!!
 				// There is no face detected
-				if(numFrames == 10 && found)
+				if(numFrames >= 10 && found)
 				{
 					std::cout << "Face lost!!!" << std::endl;
 					// Update the state
@@ -233,6 +251,7 @@ int main(int argc, char *argv[])
 				}
 				else
 				{
+					std::cout << "He entrado aqui? " << numFrames << " " << found << std::endl;
 					// Restore the counter
 					numFrames = 0;
 
@@ -312,6 +331,7 @@ int main(int argc, char *argv[])
 				}
 				else
 				{
+					std::cout << "O quizás aqui? " << numFrames << " " << found << std::endl;
 					// Restore the counter
 					numFrames = 0;
 
@@ -377,6 +397,24 @@ int main(int argc, char *argv[])
 		}
 
 		// Print the Kalman detected center
+		if(found)
+		{
+			// Print the center of the image
+			// Print the center of the estimation
+			cv::circle(	image,			// Destination image
+						kalmanCenter,	// Center of the detection
+						2, 				// Radius
+						CV_RGB(255,0,0),// Color
+						-1);			// Fill the circle
+
+
+			// Print a rectangle 
+			cv::rectangle(	image, 				// Destination image
+							cv::Point(kalmanCenter.x-10,kalmanCenter.y-10),	// left sup vertex
+							cv::Point(kalmanCenter.x+10,kalmanCenter.y+10), // right inf vertex
+							CV_RGB(255,0,0), 	// Color
+							2);		// Fill the circle
+		}
 
 		// Show the image
 		cv::namedWindow( "Face Detector", cv::WINDOW_AUTOSIZE );// Create a window for display.
