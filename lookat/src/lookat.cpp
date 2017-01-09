@@ -16,24 +16,9 @@
 #include <iostream>
 #include <cmath>
 
-//**************************************************
-// DAVID CODE
-/*#include "ros/ros.h"
+#include "ros/ros.h"
 #include "ros/package.h"
-#include "geometry_msgs/Point.h"*/
-// End DAVID CODE
-//**************************************************
-
-//**************************************************
-// DAVID CODE
-// Defines to control the source of the images
-
-// If Camera is active, the image source is the cámera
-
-//#define Camera
-
-// If the Video is active, the image source is the video file
-#define Video
+#include "geometry_msgs/Point.h"
 
 
 // Max variation constant
@@ -76,9 +61,7 @@ int main(int argc, char **argv)
     // Variable to store the measures
     cv::Mat measure(2, 1, CV_32F); // 2 rows x 1 column of float
 
-	//**************************************************
-	// DAVID CODE
-	/*ros::init(argc, argv, "point_publisher");
+	ros::init(argc, argv, "point_publisher");
 	ros::NodeHandle n;
 
 
@@ -88,7 +71,7 @@ int main(int argc, char **argv)
 	std::string face_cascade_name_std;
 	if (!n.getParam("face_cascade_name", face_cascade_name_std))
 	      ROS_ERROR("Could not get face_cascade_name");
-	cv::String face_cascade_name = face_cascade_name_std;*/
+	cv::String face_cascade_name = face_cascade_name_std;
 
 	//Check args
 	switch(argc)
@@ -124,9 +107,8 @@ int main(int argc, char **argv)
     // Init the measure results
     measure.setTo(cv::Scalar::all(0.0f));
 
-	//**************************************************
-	// DAVID CODE
-    /*//open the video stream and make sure it's opened
+
+	//open the video stream and make sure it's opened
     if( !camera.open(cam_id) )
 	{
         std::cout << "Error opening the camera. May be invalid device id. EXIT program." << std::endl;
@@ -144,53 +126,9 @@ int main(int argc, char **argv)
 		return -1; 
 	}
 
-	while (ros::ok())*/
-
-
-	//**************************************************
-	// DAVID CODE
-
-	#if defined Video
-		// Init the video file
-		std::cout << "The input source is the Video File\n";
-
-		// Loading the video
-		camera = cv::VideoCapture("../img/video.mpeg");
-
-		// Verify if the video is opened
-		if(!camera.isOpened())                              // Check for invalid video
-	    {
-	        std::cout <<  "Could not open or find the video" << std::endl;
-	        return -1;
-	    }
-	#elif defined Camera
-		// Inicializar la cámara
-		std::cout << "The input source is the camera\n";
-	    // Open the video stream and make sure it's opened
-    	if( !camera.open(cam_id) ) 
-		{
-	        std::cout << "Error opening the camera. May be invalid device id. EXIT program." << std::endl;
-        	return -1;
-		}
-	#else
-		// There is no define uncomented
-		std::cout << "Error in the source of video!!\nExit!!";
-		return -1;
-	#endif
-
-	// Load the XML file to detect faces
-    if(!face_cascade.load("../haarcascade_frontalface_default.xml"))
+	while (ros::ok())
     {
-    	std::cout <<  "Could not open of find the XML file" << std::endl;
-    	return -1;
-    }		
-
-	while(1)
-    {
-		//**************************************************
-		// DAVID CODE
-		///geometry_msgs::Point p;
-		cv::Point p;
+		geometry_msgs::Point p;
 
 		// Kalman filter center
 		cv::Point kalmanCenter(320,240);
@@ -208,52 +146,140 @@ int main(int argc, char **argv)
 		   cout << "Cannot read the frame from video file" << endl;
 		   break;
 		}
-
 		
+		if(found)
+		{
+			// Update the Kalman filter values
+
+	        KF.transitionMatrix.at<float>(3) = dT;
+	        KF.transitionMatrix.at<float>(7) = dT;
+
+	        // Predict the new position
+	        cv::Mat state(4 , 1, CV_32F); // 4 Results, 1 column, float
+
+	        state = KF.predict();
+
+	        kalmanCenter = cv::Point(state.at<float>(0), state.at<float>(1));
+
+	        // Print the center of the image
+			// Print the center of the estimation
+			cv::circle(	frame,			// Destination image
+						kalmanCenter,	// Center of the detection
+						2, 				// Radius
+						CV_RGB(255,0,0),// Color
+						-1);			// Fill the circle
+
+
+			// Print a rectangle 
+			cv::rectangle(	frame, 				// Destination image
+							cv::Point(kalmanCenter.x-10,kalmanCenter.y-10),	// left sup vertex
+							cv::Point(kalmanCenter.x+10,kalmanCenter.y+10), // right inf vertex
+							CV_RGB(255,0,0), 	// Color
+							2);		// Fill the circle
+	    }
+
 	    Point pnt = detectFace(frame, prevPoint);
 
 	    // Verify the detection is correct
 	    if((pnt.x!=1000)&&(pnt.y!=1000))
 	    {
-	    	// There are a face detection
-	    	if(found)
-		    {
-		    	// Only detect if the face is between a margin
+	    	// There is a detection
+
+	        if(!found)
+        	{
+        		// First detection
+
+        		// Correct the number of Frames
+	        	numFrames = 0;
+
+	        	// Update the measure
+	        	measure.at<float>(0) = pnt.x;
+				measure.at<float>(1) = pnt.y;
+	        	
+	        	// Update the previus point
+	        	prevPoint = pnt;
+
+        		// Init the values of Kalman filter
+				cv::setIdentity(KF.errorCovPre, cv::Scalar::all(0.1f));
+
+				KF.statePost.at<float>(0) = measure.at<float>(0);
+				KF.statePost.at<float>(1) = measure.at<float>(1);
+				KF.statePost.at<float>(2) = 0.0f;
+				KF.statePost.at<float>(3) = 0.0f;
+
+				//cout << "Lo he recuperado!!" << numFrames << std::endl;
+
+
+				found = true;
+        	}
+        	else
+        	{
+        		// Only detect if the face is between a margin
 		        if(distEuclidean(pnt.x, prevPoint.x, pnt.y, prevPoint.y) <= TOTAL_VARIATION)
 		        {
-		        	// The point is correct
+		        	// Correct the number of Frames
+		        	numFrames = 0;
+
+		        	// Update the measure
+		        	measure.at<float>(0) = pnt.x;
+					measure.at<float>(1) = pnt.y;
+		        	
+		        	// Update the previus point
+		        	prevPoint = pnt;
+
+		        	// Correct the position
+					KF.correct(measure);
 		        }
-		    	// Update the Kalman filter values
-
-		        KF.transitionMatrix.at<float>(3) = dT;
-		        KF.transitionMatrix.at<float>(7) = dT;
-
-		        // Predict the new position
-		        cv::Mat state(4 , 1, CV_32F); // 4 Results, 1 column, float
-
-		        state = KF.predict();
-
-		        kalmanCenter = cv::Point(state.at<float>(0), state.at<float>(1));
-
-		    }
+		        else
+		        {
+		        	// The detection is outside the range
+		        	numFrames++;
+		        }
+        	}
 
 	    }
 	    else
 	    {
-	    	numFrames++;
 	    	// The detection is lost more than 10 frames
 	    	if( numFrames >= 10) 
 	    	{
+	    		//cout << "Lo he perdido" << numFrames << std::endl;   		
+	    		prevPoint = cv::Point(320,240);
 	    		found = false;
+	    	}
+	    	else
+	    	{
+	    		numFrames++;
 	    	}
 	    }
 
-	    //**************************************************
-		// DAVID CODE
-		/*point_pub.publish(p);
+
+		imshow( "test2", frame);
+
+		// Return value
+		if(found && numFrames == 0)
+		{
+			// Face detected
+			p.x = prevPoint.x;
+			p.y = prevPoint.y;
+		}
+		else if(found)
+		{
+			// Return Kalman values
+			p.x = kalmanCenter.x;
+			p.y = kalmanCenter.y;
+		}
+		else
+		{
+			// return a dummy value
+			p.x = 1000;
+			p.y = 1000;
+		}
+
+	    point_pub.publish(p);
 
 		ros::spinOnce();
-		loop_rate.sleep();*/
+		loop_rate.sleep();
 
 		// If the 'q' or 'Esc' is pressed, exit the loop
         int c = waitKey(10);
@@ -282,7 +308,7 @@ Point detectFace(Mat frame, Point lastPoint)
     //-- Detect faces
     face_cascade.detectMultiScale(	frame_gray, // Image
 									faces, 		// Faces location
-									1.1, 		// Scale factor
+									1.3, 		// Scale factor
 									4,			// min Neighbors
 									0|CV_HAAR_DO_CANNY_PRUNING,			// Flags
 									Size(30,30));	// Min Size
@@ -306,7 +332,7 @@ Point detectFace(Mat frame, Point lastPoint)
     	}
     }
 
-    imshow( "test", frame);
+    //imshow( "test", frame);
     return nearest_face;
 }
 
