@@ -29,7 +29,7 @@ using namespace std;
 
 /** Function Headers */
 Point detectFace(Mat frame, Point lastPoint);
-int distEuclidean(int x1,int y1,int x2, int y2);
+int distEuclidean(int x1,int x2,int y1,int y2);
 
 /** Global variables */
 //String face_cascade_name = "haarcascade_frontalface_alt.xml";
@@ -336,7 +336,8 @@ Point detectFace(Mat frame, Point lastPoint)
     return nearest_face;
 }
 
-int distEuclidean(int x1,int y1,int x2,int y2){
+int distEuclidean(int x1,int x2,int y1,int y2);
+{
 	return sqrt(pow(x2-x1,2)+pow(y2-y1,2));
 }
 
