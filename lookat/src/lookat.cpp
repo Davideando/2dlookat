@@ -234,6 +234,13 @@ int main(int argc, char **argv)
 		        {
 		        	// The detection is outside the range
 		        	numFrames++;
+		        	// If there are more than 5 samples out of detection, 
+		        	// turn off the found
+		        	if (numFrames >= 5)
+		        	{
+		        		prevPoint = cv::Point(320,240);
+		        		found = false;
+		        	}
 		        }
         	}
 
